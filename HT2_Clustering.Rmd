@@ -1,0 +1,51 @@
+---
+title: "HT2 Clustering"
+author: "Alejandro Alvarez"
+date: "2/16/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+ 
+Agregar las librerías para poder realizar el clustering
+```{r paquetes necesarios, message=FALSE,warning=FALSE}
+library(cluster) #Para calcular la silueta
+library(e1071)#para cmeans
+library(mclust) #mixtures of gaussians
+library(fpc) #para hacer el plotcluster
+library(NbClust) #Para determinar el número de clusters óptimo
+library(factoextra) #Para hacer gráficos bonitos de clustering
+library(hopkins) #Para revisar si vale la pena hacer agrupamiento
+library(GGally) #Para hacer el conjunto de graficos
+library(FeatureImpCluster) #Para revisar la importancia de las variables en los grupos.
+library(pheatmap) #Para hacer mapa de calor
+library(data.table)
+```
+
+```{r}
+movies <- fread("./movies.csv", select = c("popularity", "budget", "revenue", "runtime", "actorsAmount"))
+set.seed(123)
+movies<-movies[complete.cases("./movies.csv")]
+```
+
+```{r}
+set.seed(123)
+hopkins(movies[,1:5])
+```
+
+```{r}
+movies_dist <- dist(movies[1:2000,1:5])
+fviz_dist(movies_dist, show_labels = F)
+```
+
+```{r}
+fviz_nbclust(movies[,1:5], kmeans, method = "wss") +
+labs(subtitle = "Elbow method")
+```
+```{r}
+fviz_nbclust(movies[,1:5], kmeans, method = "silhouette") +
+labs(subtitle = "Silhouette method")
+```
+
