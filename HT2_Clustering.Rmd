@@ -21,31 +21,119 @@ library(hopkins) #Para revisar si vale la pena hacer agrupamiento
 library(GGally) #Para hacer el conjunto de graficos
 library(FeatureImpCluster) #Para revisar la importancia de las variables en los grupos.
 library(pheatmap) #Para hacer mapa de calor
-library(data.table)
 ```
-
-```{r}
-movies <- fread("./movies.csv", select = c("popularity", "budget", "revenue", "runtime", "actorsAmount"))
-set.seed(123)
+##Selección de datos para análisis
+Se importan los datos de la base de datos y se normalizan para poder ser analizados posteriormente
+```{r importacion de datos, message=FALSE,warning=FALSE}
+movies <- fread("./movies.csv", select = c("popularity","revenue" ,"budget", "runtime", "actorsAmount"))
+set.seed(111)
 movies<-movies[complete.cases("./movies.csv")]
+movies<-scale(movies)
 ```
 
-```{r}
-set.seed(123)
-hopkins(movies[,1:5])
+##Proceso de agrupamiento
+Se verificara por medio del estadístico de Hopkings si vale la pena el agrupamiento por lo que el dato obtenido debe ser diferente a 0.5.
+```{r estadistico de Hopkings, , message=FALSE,warning=FALSE}
+set.seed(111)
+hopkins(movies)
 ```
-
-```{r}
-movies_dist <- dist(movies[1:2000,1:5])
+Dado que estadistico de Hopkings esta bastante alejado de 0.5 se puede inferir que  los datos no son aleatorios hay altas posibilidades de que sea factible el agrupamiento de las variables seleccionadas. Por lo que se realiza el VAT (dado a que la base de datos es muy grande, se utilizaron unicamente 4000 lineas de las 10000 presentes):
+```{r VAT , message=FALSE,warning=FALSE}
+movies_dist <- dist(movies[1:4000,])
 fviz_dist(movies_dist, show_labels = F)
 ```
+Como se puede observar en la VAT sí se observan patrones por lo que es factible el agrupamiento, confirmando el valor obtenido con el estadístico de Hopkings.
 
-```{r}
-fviz_nbclust(movies[,1:5], kmeans, method = "wss") +
+##Número de grupos o clusters
+Para elegir el número ideal de agrupamientos o clusters se utilizarán dos metodos:
+*Metódo de Codo:
+```{r método de Codo, message=FALSE,warning=FALSE}
+fviz_nbclust(movies, kmeans, method = "wss") +
 labs(subtitle = "Elbow method")
 ```
-```{r}
-fviz_nbclust(movies[,1:5], kmeans, method = "silhouette") +
+Según el resultado obtenido por este método, el número ideal de agrupaciones es de: 3
+
+*Método de Silueta
+```{r método de silueta}
+fviz_nbclust(movies, kmeans, method = "silhouette") +
 labs(subtitle = "Silhouette method")
+```
+Según el resultado obtenido por este método, el número ideal de agrupaciones es de: 2
+
+##K-medias
+Basándonos en ambos resultados, se utilizará el monto sugerido por el método de codo. (3 clusters)
+```{r, message=FALSE,warning=FALSE}
+means <- kmeans(movies, 3, iter.max =100)
+movies$means <- means$cluster
+```
+Lo resultados obtenisod fueron:
+K-means clustering with 3 clusters of sizes 8868, 964, 168
+
+Cluster means:
+  popularity    budget   revenue   runtime actorsAmount means    mxGau
+1   41.62992   9678916  17248557  98.11615   2351.40494     2 1.036423
+2  110.00488  75840756 269888643 114.93672    636.00104     3 1.456432
+3  230.47766 158173810 918133310 129.69048     67.27381     1 2.000000
+
+Within cluster sum of squares by cluster:
+[1] 1.192689e+19 1.437799e+19 2.142464e+19
+ (between_SS / total_SS =  79.9 %)
+
+Por lo que se puede decir que hay un 79.9% de cohesión entre variables
+
+##Gráfica de los clusters
+```{r}
+plotcluster(movies,means$cluster) 
+```
+
+```{r}
+means$size
+```
+
+```{r}
+means$withinss
+```
+
+
+##Clustering Jerarquico
+```{r}
+hc<-hclust(movies_dist, method = "ward.D2") 
+plot(hc, cex=0.5, axes=FALSE) #Genera el dendograma
+rect.hclust(hc,k=3)
+```
+
+##Test de Cardinalidad vs Normalidad
+```{r}
+library(ggrepel)
+card<-data.frame(withinss=means$withinss, size=means$size)
+ggplot(card, aes(size,withinss))+
+geom_point()+
+geom_smooth(method="lm")+
+labs(x="cardinalidad (size)",y="magnitud (whithinss)")+
+geom_text_repel(label=rownames(card))
+```
+Como se puede observar los grupos no se alejan demasiado de la línea recta por lo que podríamos decir que no existen grupos anómalos
+
+##Silueta de clustering
+```{r}
+silkm<-silhouette(means$cluster,dist(movies))
+mean(silkm[,3]) 
+```
+
+```{r}
+plot(silkm, cex.names=.4, col=1:5)
+```
+
+##Mezcla de Gausianos
+```{r}
+clustering<-Mclust(movies,3)
+summary(clustering)
+```
+Como se puede ver en el resumen del modelo los grupos parecen no estar balanceados, puesto que difieren en el número de individuos por grupo
+
+```{r}
+movies$mxGau<-clustering$classification
+silmg<-silhouette(clustering$classification,movies_dist)
+mean(silmg[,3])
 ```
 
